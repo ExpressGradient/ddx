@@ -11,6 +11,7 @@ class DDx:
 
         self.problem = ""
         self.__understanding = ""
+        self.__representation = ""
 
         self.verbose = False
 
@@ -75,15 +76,91 @@ Steps to follow:
 3. Resolve any conflicting or ambiguous points by providing clear explanations or assumptions.
 4. Present the final understanding in a structured and concise format.
 
-Here are the problem understanding candidates: {"\n-----\n".join(candidates)}""",
+Here are the problem understanding candidates: {"\n-----\n".join(candidates)}
+
+Unified understanding: """,
             n=1,
         )[0]
 
         self.__vprint(f"Problem understanding: {self.__understanding}")
+
+    def __represent_problem(self):
+        self.__vprint("Generating problem representation candidates...")
+
+        candidates = self.__chat(f"""Goal: Create a representation from the problem understanding.
+Structure the problem into smaller, actionable components.
+
+Follow these steps carefully:
+1. Break down the problem:
+    - Identify distinct subproblems or tasks required to solve the main problem.
+    - Ensure that each subproblem is actionable, specific, and clear.
+
+2. Define Relationships:
+    - Determine how the subproblems relate to each other:
+        - Sequential: One subproblem depends on the result of another.
+        - Parallel: Subproblems can be solved independently.
+        - Cyclic: Subproblems may involve iterative refinement.
+    - Clearly describe these relationships.
+
+3. List Constraints:
+    - Identify any rules, limitations, or assumptions that must be satisfied.
+    - Examples: Input constraints, boundary conditions, performance limits.
+
+4. Organize the Representation:
+    - Present your output in the following structure:
+        - Subproblems
+        - Relationships between subproblems
+        - Constraints
+
+Problem understanding: {self.__understanding}
+""")
+
+        self.__vprint("Merging problem representation candidates...")
+
+        self.__representation = self.__chat(
+            f"""Goal: Merge multiple problem representation candidates into a single, unified structure.
+Follow these steps:
+1. Analyze Individual Representations:
+    - Review the provided problem representations
+    - Identify commonalities across all representations
+    - Highlight any unique or complementary elements in each representation.
+
+2. Merge Subproblems:
+    - Combine subproblems from each representation:
+        - Include common subproblems.
+        - Add unique or complementary subproblems to enrich the structure.
+        - Remove redundant or overlapping subproblems.
+
+3. Merge Relationships:
+    - Consolidate relationships between subproblems:
+        - Preserve dependencies
+        - Resolve conflicts or inconsistencies.
+
+4. Merge Constraints:
+    - Combine the constraints from all representations.
+    - Eliminate duplicates and clarify ambiguities.
+
+5. Resolve Conflicts:
+    - If there are contradictions or ambiguities, make assumptions or provide resolutions to ensure consistency.
+
+6. Organize the Unified Representation:
+    - Present the final output in the following structure:
+        - Subproblems
+        - Relationships between subproblems
+        - Constraints
+
+Problem representation candidates: {"\n-----\n".join(candidates)}
+
+Unified representation: """,
+            n=1,
+        )[0]
+
+        self.__vprint(f"Problem representation: {self.__representation}")
 
     def run(self, problem: str, verbose=False):
         self.problem = problem
         self.verbose = verbose
 
         self.__understand_problem()
+        self.__represent_problem()
         return ""
