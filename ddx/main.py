@@ -91,28 +91,18 @@ Unified understanding: """,
 Structure the problem into smaller, actionable components.
 
 Follow these steps carefully:
-1. Break down the problem:
-    - Identify distinct subproblems or tasks required to solve the main problem.
-    - Ensure that each subproblem is actionable, specific, and clear.
+1. Analyze the problem understanding and split into smaller logical subproblems.
+2. Arrange the subproblems in the order they should be solved.
+3. Ensure the sequence is logical and follows any natural dependencies (e.g., validate inputs before computation)
+4. Identify and constraints that must be satisfied for the solution.
 
-2. Define Relationships:
-    - Determine how the subproblems relate to each other:
-        - Sequential: One subproblem depends on the result of another.
-        - Parallel: Subproblems can be solved independently.
-        - Cyclic: Subproblems may involve iterative refinement.
-    - Clearly describe these relationships.
-
-3. List Constraints:
-    - Identify any rules, limitations, or assumptions that must be satisfied.
-    - Examples: Input constraints, boundary conditions, performance limits.
-
-4. Organize the Representation:
-    - Present your output in the following structure:
-        - Subproblems
-        - Relationships between subproblems
-        - Constraints
+Present your output in the following structure:
+1. Subproblems (listed in sequential order)
+2. Constraints.
 
 Problem understanding: {self.__understanding}
+
+Generate a structured problem representation: 
 """)
 
         self.__vprint("Merging problem representation candidates...")
@@ -120,34 +110,15 @@ Problem understanding: {self.__understanding}
         self.__representation = self.__chat(
             f"""Goal: Merge multiple problem representation candidates into a single, unified structure.
 Follow these steps:
-1. Analyze Individual Representations:
-    - Review the provided problem representations
-    - Identify commonalities across all representations
-    - Highlight any unique or complementary elements in each representation.
 
-2. Merge Subproblems:
-    - Combine subproblems from each representation:
-        - Include common subproblems.
-        - Add unique or complementary subproblems to enrich the structure.
-        - Remove redundant or overlapping subproblems.
-
-3. Merge Relationships:
-    - Consolidate relationships between subproblems:
-        - Preserve dependencies
-        - Resolve conflicts or inconsistencies.
-
-4. Merge Constraints:
-    - Combine the constraints from all representations.
-    - Eliminate duplicates and clarify ambiguities.
-
-5. Resolve Conflicts:
-    - If there are contradictions or ambiguities, make assumptions or provide resolutions to ensure consistency.
-
-6. Organize the Unified Representation:
-    - Present the final output in the following structure:
-        - Subproblems
-        - Relationships between subproblems
-        - Constraints
+1. Review the provided problem representations.
+2. Identify common subproblems across all representations.
+3. Include unique or complementary subproblems to enrich the final structure.
+4. Arrange the subproblems in a logical and sequential order.
+5. Merge the constraints and resources from all representations, ensuring no duplicates or contradictions.
+6. Present the final output in the following structure:
+    - Subproblems (sequential order)
+    - Constraints
 
 Problem representation candidates: {"\n-----\n".join(candidates)}
 
