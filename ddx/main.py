@@ -12,6 +12,7 @@ class DDx:
         self.problem = ""
         self.__understanding = ""
         self.__representation = ""
+        self.__solution_plan = []
 
         self.verbose = False
 
@@ -35,6 +36,23 @@ class DDx:
         )
 
         return [choice.message.content for choice in response.choices]
+
+    def __parse(self, query: str, response_format: BaseModel):
+        return (
+            client.beta.chat.completions.parse(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "developer",
+                        "content": "You are a highly intelligent assistant that can help in solving a complex problem in multiple phases",
+                    },
+                    {"role": "user", "content": query},
+                ],
+                response_format=response_format,
+            )
+            .choices[0]
+            .message.parsed
+        )
 
     def __vprint(self, content: str):
         if self.verbose:
@@ -128,10 +146,71 @@ Unified representation: """,
 
         self.__vprint(f"Problem representation: {self.__representation}")
 
+    def __plan_solution(self):
+        self.__vprint("Generating solution planning candidates...")
+
+        candidates = self.__chat(f"""Goal: Generate a solution plan to a complex problem given its subproblems and constraints.
+Follow these steps:
+1. Analyze the list of subproblems. 
+2. For each subproblem, propose:
+    - A clear and actionable method to solve it.
+    - The required inputs for the method.
+    - The expected outputs after execution.
+3. Arrange these methods into a sequential plan.
+4. Ensure the plan adheres to the given constraints.
+
+Problem representation: {self.__representation}
+
+Generate the complete solution plan:""")
+
+        self.__vprint("Merging solution planning candidates...")
+
+        solution_plan_str = self.__chat(
+            f"""Goal: Merge the multiple proposed solution plans into a single, unified plan.
+Follow these steps:
+
+1. Compare the proposed plans and identify commonalities.
+2. Incorporate unique or complementary elements from each plan.
+3. Resolve any conflicts or contradictions.
+4. Ensure it addresses all subproblems in sequential order.
+5. Present the final unified plan in a clear, step-by-step format.
+6. Verify that inputs and outputs are clearly defined for each step.
+
+Proposed plans: {candidates}
+
+Generate the unified solution plan:""",
+            n=1,
+        )[0]
+
+        self.__vprint("Extracting contents from solution plan...")
+
+        class Step(BaseModel):
+            description: str
+            method: str
+            input: str
+            expected_output: str
+
+        class SolutionPlan(BaseModel):
+            steps: list[Step] = Field(
+                ...,
+                description="List of steps (with description, method, inputs and outputs) in the solution plan",
+            )
+            constraints: str = Field(
+                ..., description="Constraints mentioned in the solution plan"
+            )
+
+        self.__solution_plan = self.__parse(
+            f"""Extract the list of steps and constraints from the solution plan: {solution_plan_str}""",
+            SolutionPlan,
+        )
+
+        self.__vprint(f"Solution plan: {self.__solution_plan}")
+
     def run(self, problem: str, verbose=False):
         self.problem = problem
         self.verbose = verbose
 
         self.__understand_problem()
         self.__represent_problem()
+        self.__plan_solution()
         return ""
