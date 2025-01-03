@@ -1,1 +1,1 @@
-from .main import DDx
+from .main import run

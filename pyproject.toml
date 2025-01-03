@@ -1,7 +1,7 @@
 [project]
 name = "ddx"
 version = "0.1.0"
-description = "Add your description here"
+description = "DDx is a system to solve complex math problems"
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [{name = "Diddigam Sai Praneeth", email = "johndoeknown@protonmail.com"}]

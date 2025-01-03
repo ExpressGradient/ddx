@@ -1,2 +1,2 @@
-# ddx
-ddx is an algorithm to solve complex problems
+# DDx
+DDx is a system to solve complex math problems.
