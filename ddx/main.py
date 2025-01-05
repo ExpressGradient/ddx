@@ -92,14 +92,21 @@ def generate_openai_tool_spec(functions):
 
 
 class Agent:
-    def __init__(self, name, developer_message, tools=None):
+    def __init__(self, name, developer_message, tools=None, verbose=False):
         self.name = name
         self.messages = [{"role": "developer", "content": developer_message}]
         self.tools = tools
         self.tool_specs = generate_openai_tool_spec(self.tools)
 
+        self.verbose = verbose
+
+    def vprint(self, content):
+        if self.verbose:
+            print(f"\033[1m{content}\033[0m")
+
     def chat(self, message):
         self.messages.append({"role": "user", "content": message})
+        self.vprint(f'To {self.name}: {message}')
 
         response = client.chat.completions.create(
             model="gpt-4o",
@@ -109,6 +116,7 @@ class Agent:
         )
 
         self.messages.append(response.choices[0].message)
+        self.vprint(f'From {self.name}: {response.choices[0].message}')
 
         if response.choices[0].finish_reason == "function_call":
             tool_choice = response.choices[0].message.tool_calls[0]["function"]
@@ -126,6 +134,7 @@ class Agent:
             }
 
             self.messages.append(tool_message)
+            self.vprint(f'From tool {tool_choice["name"]}: {result}')
 
             response = client.chat.completions.create(
                 model="gpt-4o",
@@ -134,7 +143,8 @@ class Agent:
                 tool_choice="auto",
             )
 
-            self.messages.append(response.choices[0].message)    
+            self.messages.append(response.choices[0].message)
+            self.vprint(f'From {self.name}: {response.choices[0].message}')  
 
         return self.messages[-1]["content"]
 
@@ -195,7 +205,7 @@ team = Agent(
 )
 
 
-def DDx(question):
+def DDx(question, verbose=False):
     print("Initializing DDx...")
 
     house.chat(
