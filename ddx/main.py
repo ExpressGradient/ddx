@@ -1,6 +1,7 @@
 import json
 import inspect
 from openai import OpenAI
+from pydantic import BaseModel, Field
 
 client = OpenAI()
 
@@ -126,6 +127,29 @@ class Agent:
 
             self.messages.append(tool_message)
 
+        return self.messages[-1]["content"]
+
+    def check_phase_completion(self):
+        class PhaseCompletion(BaseModel):
+            is_phase_completed: bool = Field(
+                ..., description="Is this phase completed?"
+            )
+
+        response = client.beta.chat.completions.parse(
+            model="gpt-4o",
+            messages=self.messages
+            + [
+                {
+                    "role": "user",
+                    "content": """Did the team satisfy all the goals for the current phase? 
+Is it the time to move on to the next phase""",
+                }
+            ],
+            response_format=PhaseCompletion,
+        )
+
+        return response.choices[0].message.parsed.is_phase_completed
+
 
 house = Agent(
     "House",
@@ -160,3 +184,28 @@ team = Agent(
 - You have access to SymPy, a symbolic mathematics library, for tasks involving algebra, calculus, equation solving, and other symbolic computations.
 - Ensure all computational solutions are generated using SymPy, and clearly explain the methods and results.""",
 )
+
+
+def DDx(question):
+    print("Initializing DDx...")
+
+    house.chat(
+        f"The user has posed the following question: {question}. Let's start working on this."
+    )
+    team.chat(f"House got a new question for us to work on: {question}")
+
+    for phase in phases:
+        print(f"Starting {phase.name} phase")
+
+        house_response = house.chat(
+            f"The phase is {phase.name} and its goals are {phase.goals}. What should the team do?"
+        )
+
+        while not phase.is_completed:
+            team_response = team.chat(f"House asks for {house_response}")
+            house_response = house.chat(f'Team responded with: "{team_response}"')
+
+            if house.check_phase_completion():
+                phase.is_completed = True
+
+    return house.chat("The final answer is: ")
