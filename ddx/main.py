@@ -127,6 +127,15 @@ class Agent:
 
             self.messages.append(tool_message)
 
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=self.messages,
+                tools=self.tool_specs,
+                tool_choice="auto",
+            )
+
+            self.messages.append(response.choices[0].message)    
+
         return self.messages[-1]["content"]
 
     def check_phase_completion(self):
