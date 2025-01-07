@@ -1,15 +1,20 @@
-import json
 import inspect
+import io
+import json
+from contextlib import redirect_stdout
+
+import sympy
 from openai import OpenAI
 from pydantic import BaseModel, Field
+from sympy import Eq, solve, symbols
 
 client = OpenAI()
 
 
 class Phase:
-    def __init__(self, name, goal):
+    def __init__(self, name, goals):
         self.name = name
-        self.goal = goal
+        self.goals = goals
         self.is_completed = False
 
 
@@ -62,6 +67,9 @@ ensuring compatibility with SymPy as the only computational tool available durin
 
 
 def generate_openai_tool_spec(functions):
+    if functions is None:
+        return None
+
     tool_specs = []
 
     for func in functions:
@@ -72,11 +80,15 @@ def generate_openai_tool_spec(functions):
         signature = inspect.signature(func)
 
         for param_name, param in signature.parameters.items():
-            parameters["properties"][param_name] = {
-                "type": "string"
-                if param.annotation is inspect.Parameter.empty
-                else str(param.annotation)
-            }
+            param_type = (
+                "string"
+                if param.annotation in [str, inspect.Parameter.empty]
+                else "number"
+                if param.annotation in [int, float]
+                else "object"
+            )
+
+            parameters["properties"][param_name] = {"type": param_type}
             if param.default is not inspect.Parameter.empty:
                 parameters["required"].append(param_name)
 
@@ -86,7 +98,7 @@ def generate_openai_tool_spec(functions):
             "parameters": parameters,
         }
 
-        tool_specs.append(tool_spec)
+        tool_specs.append({"type": "function", "function": tool_spec})
 
     return tool_specs
 
@@ -100,42 +112,19 @@ class Agent:
 
         self.verbose = verbose
 
-    def vprint(self, content):
+    def vprint(self):
         if self.verbose:
-            print(f"\033[1m{content}\033[0m")
+            print(f"FROM {self.name}: {self.messages[-1]['content']}\n")
 
     def chat(self, message):
         self.messages.append({"role": "user", "content": message})
-        self.vprint(f'To {self.name}: {message}')
+        self.vprint()
 
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=self.messages,
-            tools=self.tool_specs,
-            tool_choice="auto",
-        )
-
-        self.messages.append(response.choices[0].message)
-        self.vprint(f'From {self.name}: {response.choices[0].message}')
-
-        if response.choices[0].finish_reason == "function_call":
-            tool_choice = response.choices[0].message.tool_calls[0]["function"]
-
-            tool_to_call = [
-                tool for tool in self.tools if tool.__name__ == tool_choice["name"]
-            ][0]
-            tool_args = json.loads(tool_choice["arguments"])
-            result = tool_to_call(**tool_args)
-
-            tool_message = {
-                "role": "tool",
-                "content": json.dumps({**tool_args, **result}),
-                "tool_call_id": response.choices[0].message.tool_calls[0]["id"],
-            }
-
-            self.messages.append(tool_message)
-            self.vprint(f'From tool {tool_choice["name"]}: {result}')
-
+        if self.tool_specs is None:
+            response = client.chat.completions.create(
+                model="gpt-4o", messages=self.messages
+            )
+        else:
             response = client.chat.completions.create(
                 model="gpt-4o",
                 messages=self.messages,
@@ -143,8 +132,33 @@ class Agent:
                 tool_choice="auto",
             )
 
-            self.messages.append(response.choices[0].message)
-            self.vprint(f'From {self.name}: {response.choices[0].message}')  
+        self.messages.append(dict(response.choices[0].message))
+        self.vprint()
+
+        if response.choices[0].finish_reason == "tool_calls":
+            for call_dict in response.choices[0].message.tool_calls:
+                tool_name = call_dict.function.name
+                tool_id = call_dict.id
+                tool_args = json.loads(call_dict.function.arguments)
+
+                tool_to_call = [t for t in self.tools if t.__name__ == tool_name][0]
+                result = tool_to_call(**tool_args)
+
+                tool_message = {
+                    "role": "tool",
+                    "content": json.dumps({**tool_args, "result": result}),
+                    "tool_call_id": tool_id,
+                }
+                self.messages.append(tool_message)
+                self.vprint()
+
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=self.messages,
+            )
+
+            self.messages.append(dict(response.choices[0].message))
+            self.vprint()
 
         return self.messages[-1]["content"]
 
@@ -160,8 +174,9 @@ class Agent:
             + [
                 {
                     "role": "user",
-                    "content": """Did the team satisfy all the goals for the current phase? 
-Is it the time to move on to the next phase""",
+                    "content": """Did the team satisfy all the goals for the current phase?
+All goals, not just a few. Also did the team fully complete the steps it laid?
+Is it the time to move on to the next phase.""",
                 }
             ],
             response_format=PhaseCompletion,
@@ -185,6 +200,45 @@ house = Agent(
 - Ensure the problem-solving process remains rigorous, focused, and iterative, improving outputs through repeated interaction.""",
 )
 
+
+def exec_sympy_code(code: str, allowed_modules: dict = None):
+    """
+    Safely execute SymPy code generated by an agent.
+
+    The agent must ensure that:
+
+    **Agent Instructions**:
+    - Your code must `print()` the final result explicitly.
+    - Intermediate calculations are allowed but should also use `print()` for visibility if necessary.
+    - Always ensure that the result is clearly labeled in the printed output for easy identification.
+
+
+    **Allowed Features**:
+    - Your code can use all SymPy operations for symbolic computation.
+    - Symbols must be explicitly declared using `symbols()`.
+    - Use `print()` to output any intermediate steps and the final result.
+
+    Args:
+        code (str): The SymPy code to evaluate.
+                    The code must include `print()` statements for results.
+        allowed_modules (dict): Allowed modules and variables for execution.
+
+    Returns:
+        str: String of the result of the execution.
+    """
+    if allowed_modules is None:
+        allowed_modules = {"sympy": sympy, "symbols": symbols, "Eq": Eq, "solve": solve}
+
+    local_env = {}
+    output_buffer = io.StringIO()
+
+    with redirect_stdout(output_buffer):
+        exec(code, {"__builtins__": __builtins__, **allowed_modules}, local_env)
+
+    output = output_buffer.getvalue().strip()
+    return str(output)
+
+
 team = Agent(
     "Team",
     """You are "Team," the executor and generator agent in the DDx problem-solving system. Your role is to:
@@ -201,12 +255,18 @@ team = Agent(
 
 **Tool Access:**
 - You have access to SymPy, a symbolic mathematics library, for tasks involving algebra, calculus, equation solving, and other symbolic computations.
-- Ensure all computational solutions are generated using SymPy, and clearly explain the methods and results.""",
+- Ensure all computational solutions are generated using SymPy, and clearly explain the methods and results.
+- Ensure that you always print the final result in the execution.
+- Try not calling the tool as soon as you receive the problem. Go through phases.""",
+    tools=[exec_sympy_code],
 )
 
 
 def DDx(question, verbose=False):
     print("Initializing DDx...")
+
+    house.verbose = verbose
+    team.verbose = verbose
 
     house.chat(
         f"The user has posed the following question: {question}. Let's start working on this."
@@ -221,10 +281,10 @@ def DDx(question, verbose=False):
         )
 
         while not phase.is_completed:
-            team_response = team.chat(f"House asks for {house_response}")
+            team_response = team.chat(f"House asks for: {house_response}")
             house_response = house.chat(f'Team responded with: "{team_response}"')
 
             if house.check_phase_completion():
                 phase.is_completed = True
 
-    return house.chat("The final answer is: ")
+    return team.chat("The final answer is: ")
