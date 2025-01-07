@@ -34,6 +34,15 @@ DDx (Dynamic Diagnosis) is an intelligent, iterative problem-solving system insp
 
 ---
 
+## 🔨 How to use?
+
+```python
+from ddx_ai import DDx
+
+DDx("<question>", verbose=False)
+```
+---
+
 ## 📄 Example Usage
 
 ### Input Problem

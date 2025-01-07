@@ -1,5 +1,5 @@
 [project]
-name = "ddx"
+name = "ddx-ai"
 version = "0.1.0"
 description = "DDx is a system to solve complex math problems"
 readme = "README.md"
